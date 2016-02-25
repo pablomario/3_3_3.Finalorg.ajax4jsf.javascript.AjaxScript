@@ -18,7 +18,8 @@ Sarissa._SARISSA_IS_MOZ = Sarissa._SARISSA_HAS_DOM_CREATE_DOCUMENT && Sarissa._S
 Sarissa._SARISSA_IS_SAFARI = navigator.userAgent.toLowerCase().indexOf("safari") != -1 || navigator.userAgent.toLowerCase().indexOf("konqueror") != -1;
 Sarissa._SARISSA_IS_SAFARI_OLD = Sarissa._SARISSA_IS_SAFARI && (parseInt((navigator.userAgent.match(/AppleWebKit\/(\d+)/) || {})[1], 10) < 420);
 Sarissa._SARISSA_IS_CHROME = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
-Sarissa._SARISSA_IS_IE = document.all && window.ActiveXObject && navigator.userAgent.toLowerCase().indexOf("msie") > -1 && navigator.userAgent.toLowerCase().indexOf("opera") == -1;
+/* FIX add new userAgent */ 
+Sarissa._SARISSA_IS_IE = (document.all && window.ActiveXObject && navigator.userAgent.toLowerCase().indexOf("msie") > -1 && navigator.userAgent.toLowerCase().indexOf("opera") == -1) || (navigator.userAgent.toLowerCase().indexOf("like gecko") > -1 && navigator.userAgent.toLowerCase().indexOf("11.") > -1);
 Sarissa._SARISSA_IS_OPERA = navigator.userAgent.toLowerCase().indexOf("opera") != -1;
 if (!window.Node || !Node.ELEMENT_NODE) {
     Node = {
@@ -302,8 +303,9 @@ if (!window.DOMParser) {
         };
     }
 }
-if (((typeof(document.importNode) == "undefined") && Sarissa._SARISSA_IS_IE) || Sarissa._SARISSA_IS_CHROME) {
-    try {
+// OLD
+//if (((typeof(document.importNode) == "undefined") && Sarissa._SARISSA_IS_IE) || Sarissa._SARISSA_IS_CHROME) {
+//   try {
         var importTable = {
             TBODY: ['<table>', '</table>'],
             THEAD: ['<table>', '</table>'],
@@ -313,7 +315,12 @@ if (((typeof(document.importNode) == "undefined") && Sarissa._SARISSA_IS_IE) || 
             TD: ['<table><tbody><tr>', '</tr></tbody></table>'],
             OPTION: ['<select>', '</select>']
         };
-        document.importNode = function(oNode, bChildren) {
+
+        // OLD
+        //  document.importNode = function(oNode, bChildren) {
+
+        /* ToDo  */
+        importNode = function(oNode, bChildren) {   
             var tmp;
             if (oNode.nodeName == '#text') {
                 return document.createTextNode(oNode.data);
@@ -354,8 +361,8 @@ if (((typeof(document.importNode) == "undefined") && Sarissa._SARISSA_IS_IE) || 
                 return result;
             }
         };
-    } catch (e) {}
-}
+ //   } catch (e) {}
+//}
 if (!Sarissa.getParseErrorText) {
     Sarissa.getParseErrorText = function(oDoc) {
         var parseErrorText = Sarissa.PARSED_OK;
@@ -907,6 +914,10 @@ A4J.AJAX.XMLHttpRequest.prototype = {
     updatePagePart: function(id, isLast) {
         var newnode = this.getElementById(id);
         if (!newnode) {
+            newnode = document.getElementsByName(id);
+            newnode = newnode ? newnode[0] : null;        
+        }
+        if (!newnode) {
             LOG.error("New node for ID " + id + " is not present in response");
             if (isLast) {
                 this.doFinish();
@@ -914,6 +925,10 @@ A4J.AJAX.XMLHttpRequest.prototype = {
             return;
         }
         var oldnode = window.document.getElementById(id);
+        if (!oldnode) {
+            oldnode = document.getElementsByName(id);
+            oldnode = oldnode ? oldnode[0] : null;        
+        }
         if (oldnode) {
             if (window.RichFaces && window.RichFaces.Memory) {
                 window.RichFaces.Memory.clean(oldnode, true);
@@ -929,7 +944,21 @@ A4J.AJAX.XMLHttpRequest.prototype = {
                         Sarissa.clearChildNodes(oldnode);
                     }
                 }
-                oldnode.outerHTML = new XMLSerializer().serializeToString(newnode);
+                // OLD 
+                // oldnode.outerHTML = new XMLSerializer().serializeToString(newnode); */
+
+                /* ToDo Created and force the use of XMLSerializer object to all browsers interet Explorer*/
+                if (Sarissa._SARISSA_IS_IE) {
+                    window.XMLSerializer = function(){};
+                    window.XMLSerializer.prototype.serializeToString = function( XMLObject ){
+                        return XMLObject.xml || '';
+                    };
+                }
+
+                var oSerializer = new XMLSerializer();
+                var sXML = oSerializer.serializeToString(newnode);
+                oldnode.outerHTML = sXML; 
+
             } else {
                 Sarissa.clearChildNodes(oldnode);
                 if (A4J.AJAX.isWebKit) {
@@ -939,7 +968,12 @@ A4J.AJAX.XMLHttpRequest.prototype = {
                         LOG.error("Node normalization failed " + e.message);
                     }
                 }
-                var importednode = window.document.importNode(newnode, true);
+                // OLD 
+                // var importednode = window.document.importNode(newnode, true);
+                
+                /* FIXME 'importNode' interface not supported*/
+                var importednode = importNode(newnode, true);
+
                 LOG.debug("Replace content of node by replaceChild()");
                 var oldGetElementById = null;
                 A4J.AJAX.TestReplacedGetElementByIdVisibility();
@@ -1110,7 +1144,12 @@ A4J.AJAX.XMLHttpRequest.prototype = {
     _copyAttribute: function(src, dst, attr) {
         var value = src.getAttribute(attr);
         if (value) {
-            dst.setAttribute(attr, value);
+            //dst.setAttribute(attr, value);
+            try{
+                dst.setAttribute(attr, value);
+            }catch (err){
+                //alert('Error');
+            }
         }
     }
 };
@@ -1415,7 +1454,8 @@ A4J.AJAX.processResponse = function(req) {
                 req.doFinish();
             }
             var idsSpan = req.getElementById("ajax-view-state");
-            LOG.debug("Hidden JSF state fields: " + idsSpan);
+            // FIX 
+            LOG.debug("Hidden JSF state fields");
             if (idsSpan != null) {
                 var namespace = options.parameters['org.ajax4jsf.portlet.NAMESPACE'];
                 LOG.debug("Namespace for hidden view-state input fields is " + namespace);
